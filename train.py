@@ -32,7 +32,8 @@ def generate_training_data(sequences, window_size, num_ns, vocab_size, seed=SEED
                 num_sampled=num_ns,
                 unique=True,
                 range_max=vocab_size,
-                seed=seed
+                seed=seed,
+                name='negative_sampling'
             )
             negative_sampling_candidates = tf.expand_dims(negative_sampling_candidates, 1)
 
@@ -45,7 +46,8 @@ def generate_training_data(sequences, window_size, num_ns, vocab_size, seed=SEED
         
     return targets, contexts, labels
 
-path_to_file = tf.keras.utils.get_file('shakespeare.txt', 'https://storage.googleapis.com/download.tensorflow.org/data/shakespeare.txt')
+# path_to_file = tf.keras.utils.get_file('shakespeare.txt', 'https://storage.googleapis.com/download.tensorflow.org/data/shakespeare.txt')
+path_to_file = './holmes.txt'
 
 text_ds = tf.data.TextLineDataset(path_to_file).filter(lambda x: tf.cast(tf.strings.length(x), bool))
 
@@ -88,7 +90,6 @@ BATCH_SIZE = 1024
 BUFFER_SIZE = 10000
 dataset = tf.data.Dataset.from_tensor_slices(((targets, contexts), labels))
 dataset = dataset.shuffle(BUFFER_SIZE).batch(BATCH_SIZE, drop_remainder=True).cache().prefetch(buffer_size=AUTOTUNE)
-print(dataset)
 
 class Word2Vec(tf.keras.Model):
     def __init__(self, vocab_size, embedding_dim):
@@ -123,15 +124,15 @@ word2vec.compile(
     loss=tf.keras.losses.CategoricalCrossentropy(from_logits=True),
     metrics=['accuracy']
 )
-word2vec.fit(dataset, epochs=20)
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir='logs')
+word2vec.fit(dataset, epochs=20, callbacks=[tensorboard_callback])
 
 weights = word2vec.get_layer('w2v_embedding').get_weights()[0]
 vocab = vectorize_layer.get_vocabulary()
 
-with io.open('vectors.tsv', 'w', encoding='utf-8') as out_v, io.open('metadata.tsv', 'w', encoding='utf-8') as out_m:
+with io.open('data.tsv', 'w', encoding='utf-8') as out:
     for index, word in enumerate(vocab):
         if index == 0:
             continue
         vec = weights[index]
-        out_v.write('\t'.join([str(x) for x in vec]) + '\n')
-        out_m.write(word + '\n')
+        out.write(word + '\t' + '\t'.join([str(x) for x in vec]) + '\n')
